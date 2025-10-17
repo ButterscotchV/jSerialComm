@@ -46,55 +46,7 @@ jobs:
       - name: Build library using Maven
         run: ./mvnw versions:set -DnewVersion=${{ steps.gitversion.outputs.version }} && ./mvnw clean package
 
-      - name: Generate changelog
-        id: changelog
-        uses: metcalfc/changelog-generator@v4.3.1
+      - uses: actions/upload-artifact@v4
         with:
-          myToken: ${{ secrets.GRADLE_UPDATE_PAT }}
-
-      - name: Create GitHub release
-        uses: ncipollo/release-action@v1
-        with:
-          token: ${{ secrets.GRADLE_UPDATE_PAT }}
-          name: "jSerialComm v${{ steps.gitversion.outputs.version }}"
-          tag: "v${{ steps.gitversion.outputs.version }}"
-          body: ${{ steps.changelog.outputs.changelog }}
-          commit: "master"
-          artifacts: "target/jSerialComm-${{ steps.gitversion.outputs.version }}.jar"
-          generateReleaseNotes: false
-          prerelease: false
-          makeLatest: true
-          draft: true
-
-      - name: Check out existing library documentation
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: documentation
-
-      - name: Update Javadoc library documentation
-        run: rm -rf documentation/binaries/* documentation/javadoc && mv target/javadoc/apidocs documentation/javadoc && sed -i "s@maven2/com/fazecast/jSerialComm/[^\"]*@maven2/com/fazecast/jSerialComm/${{ steps.gitversion.outputs.version }}/jSerialComm-${{ steps.gitversion.outputs.version }}.jar@g" documentation/index.html
-
-      - name: Publish new library documentation
-        uses: s0/git-publish-subdir-action@develop
-        env:
-          REPO: self
-          BRANCH: gh-pages
-          FOLDER: documentation
-          GITHUB_TOKEN: ${{ secrets.GRADLE_UPDATE_PAT }}
-          MESSAGE: "Updated docs to v${{ steps.gitversion.outputs.version }}"
-
-      - name: Check out Wiki source data
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository }}.wiki
-          path: markdown
-
-      - name: Update and publish Wiki release link
-        run: |
-          cd markdown
-          sed -i "s@\*\*Current Version\*\*:.*@\*\*Current Version\*\*: \*${{ steps.gitversion.outputs.version }}\* ([[Download JAR file here|https://repo1.maven.org/maven2/com/fazecast/jSerialComm/${{ steps.gitversion.outputs.version }}/jSerialComm-${{ steps.gitversion.outputs.version }}.jar]])<br />@" Home.md
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git diff-index --quiet HEAD || git commit -m "New jSerialComm release version" && git push
+          name: "jSerialComm-${{ steps.gitversion.outputs.version }}"
+          path: "target/jSerialComm-${{ steps.gitversion.outputs.version }}.jar"
