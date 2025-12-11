@@ -801,7 +801,18 @@ JNIEXPORT void JNICALL Java_com_fazecast_jSerialComm_SerialPort_retrievePortDeta
 	jstring portNameJString = (jstring)(*env)->GetObjectField(env, obj, comPortField);
 	if (checkJniError(env, __LINE__ - 1)) return;
 	const wchar_t *portName = (wchar_t*)(*env)->GetStringChars(env, portNameJString, NULL);
-	if (checkJniError(env, __LINE__ - 1)) return;
+	if (checkJniError(env, __LINE__ - 1))
+	{
+		if (portName)
+			(*env)->ReleaseStringChars(env, portNameJString, (const jchar*)portName);
+		return;
+	}
+	if (!portName)
+	{
+		lastErrorLineNumber = __LINE__ - 1;
+		lastErrorNumber = ERROR_INVALID_PARAMETER;
+		return;
+	}
 
 	// Ensure that the serial port exists
 	char continueRetrieval = 1;
@@ -874,7 +885,18 @@ JNIEXPORT jlong JNICALL Java_com_fazecast_jSerialComm_SerialPort_openPortNative(
 	unsigned char isRtsEnabled = (*env)->GetBooleanField(env, obj, isRtsEnabledField);
 	if (checkJniError(env, __LINE__ - 1)) return 0;
 	const wchar_t *portName = (wchar_t*)(*env)->GetStringChars(env, portNameJString, NULL);
-	if (checkJniError(env, __LINE__ - 1)) return 0;
+	if (checkJniError(env, __LINE__ - 1))
+	{
+		if (portName)
+			(*env)->ReleaseStringChars(env, portNameJString, (const jchar*)portName);
+		return 0;
+	}
+	if (!portName)
+	{
+		lastErrorLineNumber = __LINE__ - 1;
+		lastErrorNumber = ERROR_INVALID_PARAMETER;
+		return 0;
+	}
 
 	// Ensure that the serial port still exists and is not already open
 	EnterCriticalSection(&criticalSection);
