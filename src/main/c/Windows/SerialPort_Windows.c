@@ -118,10 +118,12 @@ static inline jboolean checkJniError(JNIEnv *env, int lineNumber)
 // Generalized port enumeration function
 static void enumeratePorts(JNIEnv *env)
 {
+	printf("[jSerialComm.dll::enumeratePorts] Enter\n");
 	// Reset the enumerated flag on all non-open serial ports
 	for (int i = 0; i < serialPorts.length; ++i)
 		serialPorts.ports[i]->enumerated = (serialPorts.ports[i]->handle != INVALID_HANDLE_VALUE);
 
+	printf("[jSerialComm.dll::enumeratePorts] Enter main enumeration\n");
 	// Enumerate all serial ports present on the current system
 	wchar_t *deviceID = NULL;
 	DWORD deviceIdLength = 0;
@@ -134,6 +136,7 @@ static void enumeratePorts(JNIEnv *env)
 	};
 	for (int i = 0; i < (sizeof(setupClasses) / sizeof(setupClasses[0])); ++i)
 	{
+		printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 1\n");
 		HDEVINFO devList = SetupDiGetClassDevsW(&setupClasses[i].guid, NULL, NULL, setupClasses[i].flags);
 		if (devList != INVALID_HANDLE_VALUE)
 		{
@@ -146,6 +149,7 @@ static void enumeratePorts(JNIEnv *env)
 			driverInfoData.cbSize = sizeof(driverInfoData);
 			while (SetupDiEnumDeviceInfo(devList, devInterfaceIndex++, &devInfoData))
 			{
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 2\n");
 				// Attempt to determine the device's Vendor ID and Product ID
 				DWORD deviceIdRequiredLength;
 				int vendorID = -1, productID = -1;
@@ -159,6 +163,7 @@ static void enumeratePorts(JNIEnv *env)
 						deviceIdLength = deviceIdRequiredLength;
 					}
 				}
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 3\n");
 				if (SetupDiGetDeviceInstanceIdW(devList, &devInfoData, deviceID, deviceIdLength, NULL))
 				{
 					wchar_t *vendorIdString = wcsstr(deviceID, L"VID_"), *productIdString = wcsstr(deviceID, L"PID_");
@@ -174,6 +179,7 @@ static void enumeratePorts(JNIEnv *env)
 					}
 				}
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 4\n");
 				// Fetch the corresponding COM port for this device
 				DWORD comPortLength = 0;
 				wchar_t *comPort = NULL, *comPortString = NULL;
@@ -199,6 +205,7 @@ static void enumeratePorts(JNIEnv *env)
 					continue;
 				}
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 5\n");
 				// Fetch the friendly name for this device
 				DWORD friendlyNameLength = 0;
 				wchar_t *friendlyNameString = NULL;
@@ -226,6 +233,7 @@ static void enumeratePorts(JNIEnv *env)
 					friendlyNameLength = comPortLength;
 				}
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 6\n");
 				// Fetch the manufacturer of this device
 				DWORD manufacturerLength = 0;
 				wchar_t *manufacturerString = NULL;
@@ -244,9 +252,11 @@ static void enumeratePorts(JNIEnv *env)
 					}
 				}
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 7\n");
 				// Fetch the device driver loaded for this device
 				wchar_t *driverString = SetupDiGetSelectedDriverW(devList, &devInfoData, &driverInfoData) ? driverInfoData.Description : NULL;
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 8\n");
 				// Fetch the bus-reported device description
 				DWORD portDescriptionLength = 0;
 				wchar_t *portDescriptionString = NULL;
@@ -273,6 +283,7 @@ static void enumeratePorts(JNIEnv *env)
 					portDescriptionLength = friendlyNameLength;
 				}
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 9\n");
 				// Fetch the physical location for this device
 				DWORD locationLength = 0;
 				wchar_t *locationString = NULL;
@@ -360,6 +371,7 @@ static void enumeratePorts(JNIEnv *env)
 					continue;
 				}
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 10\n");
 				// Check if port is already enumerated
 				serialPort *port = fetchPort(&serialPorts, comPortString);
 				if (port)
@@ -367,6 +379,7 @@ static void enumeratePorts(JNIEnv *env)
 				else
 					pushBack(&serialPorts, comPortString, friendlyNameString, portDescriptionString, locationString, serialNumberString ? serialNumberString : L"Unknown", manufacturerString ? manufacturerString : L"Unknown", driverString ? driverString : L"Unknown", vendorID, productID);
 
+				printf("[jSerialComm.dll::enumeratePorts::main] Checkpoint 11\n");
 				// Clean up memory and reset device info structure
 				free(comPort);
 				free(locationString);
@@ -383,11 +396,14 @@ static void enumeratePorts(JNIEnv *env)
 			SetupDiDestroyDeviceInfoList(devList);
 		}
 	}
+	printf("[jSerialComm.dll::enumeratePorts] Exit main enumeration\n");
 
+	printf("[jSerialComm.dll::enumeratePorts] Enter FTDI enumeration\n");
 	// Attempt to locate any FTDI-specified port descriptions
 	HINSTANCE ftdiLibInstance = LoadLibrary(TEXT("ftd2xx.dll"));
 	if (ftdiLibInstance != NULL)
 	{
+		printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 1\n");
 		FT_OpenFunction FT_Open = (FT_OpenFunction)GetProcAddress(ftdiLibInstance, "FT_Open");
 		FT_CloseFunction FT_Close = (FT_CloseFunction)GetProcAddress(ftdiLibInstance, "FT_Close");
 		FT_CreateDeviceInfoListFunction FT_CreateDeviceInfoList = (FT_CreateDeviceInfoListFunction)GetProcAddress(ftdiLibInstance, "FT_CreateDeviceInfoList");
@@ -396,14 +412,18 @@ static void enumeratePorts(JNIEnv *env)
 		unsigned char allowOpenForEnumeration = (*env)->GetStaticBooleanField(env, serialCommClass, allowOpenForEnumerationField);
 		if (FT_CreateDeviceInfoList && FT_GetDeviceInfoList && FT_EEPROM_Read)
 		{
+			printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 2\n");
 			DWORD numDevs;
 			if ((FT_CreateDeviceInfoList(&numDevs) == FT_OK) && (numDevs > 0))
 			{
+				printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 3\n");
 				FT_DEVICE_LIST_INFO_NODE *devInfo = (FT_DEVICE_LIST_INFO_NODE*)malloc(sizeof(FT_DEVICE_LIST_INFO_NODE)*numDevs);
 				if (devInfo && (FT_GetDeviceInfoList(devInfo, &numDevs) == FT_OK))
 				{
+					printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 4\n");
 					for (int i = 0; i < numDevs; ++i)
 					{
+						printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 5\n");
 						// Determine if the port is currently enumerated and already open
 						char isOpen = ((devInfo[i].Flags & FT_FLAGS_OPENED) || (devInfo[i].SerialNumber[0] == 0)) ? 1 : 0;
 						if (!isOpen)
@@ -415,6 +435,7 @@ static void enumeratePorts(JNIEnv *env)
 									break;
 								}
 
+						printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 6\n");
 						// Update the port description if not already open
 						const int comPortLength = 16;
 						wchar_t *comPort = (wchar_t*)malloc(comPortLength);
@@ -422,20 +443,24 @@ static void enumeratePorts(JNIEnv *env)
 						devInfo[i].SerialNumber[sizeof(devInfo[i].SerialNumber)-1] = 0;
 						if (!isOpen && comPort && getPortPathFromSerial(comPort, comPortLength, devInfo[i].SerialNumber))
 						{
+							printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 7\n");
 							// Check if actually connected and present in the port list
 							for (int j = 0; j < serialPorts.length; ++j)
 								if ((wcscmp(serialPorts.ports[j]->portPath + 4, comPort) == 0) && strlen(devInfo[i].Description))
 								{
+									printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 8\n");
 									// Check whether we are allowed to open the port to complete enumeration
 									unsigned char successfullyEnumerated = 0;
 									if (allowOpenForEnumeration)
 									{
+										printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 9\n");
 										// Open the port and read its configuration from EEPROM
 										FT_HANDLE ftHandle;
 										FT_EEPROM_HEADER ftEepromHeader = { .deviceType = devInfo[i].Type };
 										char manufacturer[64], manufacturerId[64], description[64], serialNumber[64];
 										if (FT_Open(0, &ftHandle) == FT_OK)
 										{
+											printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 10\n");
 											switch (devInfo[i].Type)
 											{
 												case FT_DEVICE_2232C:
@@ -484,6 +509,7 @@ static void enumeratePorts(JNIEnv *env)
 											FT_Close(ftHandle);
 										}
 
+										printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 11\n");
 										// Update port details if enumeration was successful
 										if (successfullyEnumerated)
 										{
@@ -517,6 +543,7 @@ static void enumeratePorts(JNIEnv *env)
 										}
 									}
 
+									printf("[jSerialComm.dll::enumeratePorts::FTDI] Checkpoint 12\n");
 									// Take what we can get if unable to enumerate by opening the port
 									if (!successfullyEnumerated)
 									{
@@ -552,13 +579,16 @@ static void enumeratePorts(JNIEnv *env)
 		}
 		FreeLibrary(ftdiLibInstance);
 	}
+	printf("[jSerialComm.dll::enumeratePorts] Exit FTDI enumeration\n");
 
+	printf("[jSerialComm.dll::enumeratePorts] Enter non-registered enumeration\n");
 	// Attempt to locate any non-registered virtual serial ports (e.g., from VSPE)
 	HKEY key, paramKey;
 	DWORD keyType, numValues, maxValueLength, maxComPortLength;
 	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DEVICEMAP\\SERIALCOMM", 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) &&
 			(RegQueryInfoKeyW(key, NULL, NULL, NULL, NULL, NULL, NULL, &numValues, &maxValueLength, &maxComPortLength, NULL, NULL) == ERROR_SUCCESS))
 	{
+		printf("[jSerialComm.dll::enumeratePorts::non-registered] Checkpoint 1\n");
 		// Allocate memory
 		++maxValueLength;
 		++maxComPortLength;
@@ -568,6 +598,7 @@ static void enumeratePorts(JNIEnv *env)
 		// Iterate through all COM ports
 		for (DWORD i = 0; i < numValues; ++i)
 		{
+			printf("[jSerialComm.dll::enumeratePorts::non-registered] Checkpoint 2\n");
 			// Get serial port name and COM value
 			DWORD valueLength = maxValueLength;
 			DWORD comPortLength = maxComPortLength;
@@ -575,6 +606,7 @@ static void enumeratePorts(JNIEnv *env)
 			memset(comPort, 0, comPortLength*sizeof(WCHAR));
 			if ((RegEnumValueW(key, i, valueName, &valueLength, NULL, &keyType, (BYTE*)comPort, &comPortLength) == ERROR_SUCCESS) && (keyType == REG_SZ))
 			{
+				printf("[jSerialComm.dll::enumeratePorts::non-registered] Checkpoint 3\n");
 				// Set port name and description
 				wchar_t* comPortString = (comPort[0] == L'\\') ? (wcsrchr(comPort, L'\\') + 1) : comPort;
 				wchar_t* friendlyNameString = wcsrchr(valueName, L'\\') ? (wcsrchr(valueName, L'\\') + 1) : valueName;
@@ -593,11 +625,13 @@ static void enumeratePorts(JNIEnv *env)
 		free(comPort);
 		RegCloseKey(key);
 	}
+	printf("[jSerialComm.dll::enumeratePorts] Exit non-registered enumeration\n");
 
 	// Clean up memory
 	if (deviceID)
 		free(deviceID);
 
+	printf("[jSerialComm.dll::enumeratePorts] Remove non-enumerated ports\n");
 	// Remove all non-enumerated ports from the serial port listing
 	for (int i = 0; i < serialPorts.length; ++i)
 		if (!serialPorts.ports[i]->enumerated)
@@ -606,6 +640,7 @@ static void enumeratePorts(JNIEnv *env)
 			i--;
 		}
 	portsEnumerated = 1;
+	printf("[jSerialComm.dll::enumeratePorts] Exit\n");
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved)
@@ -754,12 +789,15 @@ JNIEXPORT jstring JNICALL Java_com_fazecast_jSerialComm_SerialPort_getNativeLibr
 
 JNIEXPORT jobjectArray JNICALL Java_com_fazecast_jSerialComm_SerialPort_getCommPortsNative(JNIEnv *env, jclass serialComm)
 {
+	printf("[jSerialComm.dll::getCommPortsNative] Enter\n");
 	// Mark this entire function as a critical section
 	EnterCriticalSection(&criticalSection);
 
+	printf("[jSerialComm.dll::getCommPortsNative] enumeratePorts\n");
 	// Enumerate all ports on the current system
 	enumeratePorts(env);
 
+	printf("[jSerialComm.dll::getCommPortsNative] Fill in com port array\n");
 	// Get relevant SerialComm methods and fill in com port array
 	jobjectArray arrayObject = (*env)->NewObjectArray(env, serialPorts.length, serialComm, 0);
 	for (int i = 0; !checkJniError(env, __LINE__ - 1) && (i < serialPorts.length); ++i)
@@ -792,11 +830,13 @@ JNIEXPORT jobjectArray JNICALL Java_com_fazecast_jSerialComm_SerialPort_getCommP
 
 	// Exit critical section and return the com port array
 	LeaveCriticalSection(&criticalSection);
+	printf("[jSerialComm.dll::getCommPortsNative] Exit\n");
 	return arrayObject;
 }
 
 JNIEXPORT void JNICALL Java_com_fazecast_jSerialComm_SerialPort_retrievePortDetails(JNIEnv *env, jobject obj)
 {
+	printf("[jSerialComm.dll::retrievePortDetails] Enter\n");
 	// Retrieve the serial port parameter fields
 	jstring portNameJString = (jstring)(*env)->GetObjectField(env, obj, comPortField);
 	if (checkJniError(env, __LINE__ - 1)) return;
@@ -814,6 +854,7 @@ JNIEXPORT void JNICALL Java_com_fazecast_jSerialComm_SerialPort_retrievePortDeta
 		return;
 	}
 
+	printf("[jSerialComm.dll::retrievePortDetails] enumeratePorts\n");
 	// Ensure that the serial port exists
 	char continueRetrieval = 1;
 	EnterCriticalSection(&criticalSection);
@@ -823,6 +864,7 @@ JNIEXPORT void JNICALL Java_com_fazecast_jSerialComm_SerialPort_retrievePortDeta
 	if (!port)
 		continueRetrieval = 0;
 
+	printf("[jSerialComm.dll::retrievePortDetails] Fill Java port details\n");
 	// Fill in the Java-side port details
 	if (continueRetrieval)
 	{
@@ -865,14 +907,17 @@ JNIEXPORT void JNICALL Java_com_fazecast_jSerialComm_SerialPort_retrievePortDeta
 		if (checkJniError(env, __LINE__ - 1)) continueRetrieval = 0;
 	}
 
+	printf("[jSerialComm.dll::retrievePortDetails] Cleanup\n");
 	// Release all JNI structures
 	LeaveCriticalSection(&criticalSection);
 	(*env)->ReleaseStringChars(env, portNameJString, (const jchar*)portName);
 	checkJniError(env, __LINE__ - 1);
+	printf("[jSerialComm.dll::retrievePortDetails] Exit\n");
 }
 
 JNIEXPORT jlong JNICALL Java_com_fazecast_jSerialComm_SerialPort_openPortNative(JNIEnv *env, jobject obj)
 {
+	printf("[jSerialComm.dll::openPortNative] Enter\n");
 	// Retrieve the serial port parameter fields
 	jstring portNameJString = (jstring)(*env)->GetObjectField(env, obj, comPortField);
 	if (checkJniError(env, __LINE__ - 1)) return 0;
@@ -954,6 +999,7 @@ JNIEXPORT jlong JNICALL Java_com_fazecast_jSerialComm_SerialPort_openPortNative(
 	// Return a pointer to the serial port data structure
 	(*env)->ReleaseStringChars(env, portNameJString, (const jchar*)portName);
 	checkJniError(env, __LINE__ - 1);
+	printf("[jSerialComm.dll::openPortNative] Exit\n");
 	return (port->handle != INVALID_HANDLE_VALUE) ? (jlong)(intptr_t)port : 0;
 }
 
